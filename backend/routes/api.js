@@ -6,6 +6,29 @@
 const express = require("express");
 const router = express.Router();
 const researchService = require("../services/research");
+const tinyfishService = require("../services/tinyfish");
+
+/**
+ * POST /api/transport-research
+ * Public research only; does not authenticate with travel sites or book.
+ */
+router.post("/transport-research", async (req, res) => {
+  const { origin, destination, startDate, endDate = null, travelers = 1 } = req.body || {};
+  if (![origin, destination, startDate].every(value => typeof value === "string" && value.trim())) {
+    return res.status(400).json({ status: "FAILED", error: "INVALID_INPUT", message: "origin, destination, and startDate are required strings." });
+  }
+  const count = Number(travelers);
+  if (!Number.isInteger(count) || count < 1 || count > 20) {
+    return res.status(400).json({ status: "FAILED", error: "INVALID_TRAVELERS", message: "travelers must be a whole number from 1 to 20." });
+  }
+  try {
+    const result = await tinyfishService.researchTransport({ origin: origin.trim(), destination: destination.trim(), startDate, endDate, travelers: count });
+    return res.json({ status: result.metadata?.status || "SUCCESS", ...result });
+  } catch (err) {
+    console.error("[POST /api/transport-research] Error:", err.message);
+    return res.status(err.status || 500).json({ status: "FAILED", error: err.code || "TRANSPORT_RESEARCH_ERROR", message: err.message, details: err.details || null });
+  }
+});
 
 /**
  * GET /api/health

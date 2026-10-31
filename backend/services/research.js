@@ -203,6 +203,23 @@ async function executeTripPlanMission(planParams, options = {}) {
       { sourceUrl: researchData.sourceUrl }
     );
 
+    // Transport research is optional for planning: if public fare data cannot
+    // be retrieved, the plan still completes with intercity cost marked unknown.
+    let transportResearch = null;
+    try {
+      transportResearch = await tinyfishService.researchTransport({
+        origin: planParams.origin,
+        destination: planParams.destination,
+        startDate: planParams.startDate,
+        endDate: planParams.endDate,
+        travelers: planParams.travelers
+      });
+    } catch (transportError) {
+      logMissionEvent(missionId, "TRANSPORT_RESEARCH_UNAVAILABLE", "Transport research could not verify public listings; no intercity fare will be added to the budget.", {
+        code: transportError.code || "TRANSPORT_RESEARCH_ERROR"
+      });
+    }
+
     // Step 2: Gemini Itinerary Generation
     logMissionEvent(
       missionId,
@@ -233,7 +250,8 @@ async function executeTripPlanMission(planParams, options = {}) {
       budget: planParams.budget,
       travelers: planParams.travelers,
       startDate: planParams.startDate,
-      endDate: planParams.endDate
+      endDate: planParams.endDate,
+      transportResearch
     });
 
     logMissionEvent(
@@ -253,6 +271,7 @@ async function executeTripPlanMission(planParams, options = {}) {
         endDate: planParams.endDate
       },
       budgetAnalysis,
+      transportResearch,
       itinerary,
       researchSources: [
         {

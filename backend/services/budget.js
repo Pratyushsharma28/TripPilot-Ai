@@ -37,7 +37,8 @@ function analyzeBudget({
   budget,
   travelers = 2,
   startDate,
-  endDate
+  endDate,
+  transportResearch = null
 }) {
   const budgetLimit = Number(budget) || 15000;
   const numTravelers = Number(travelers) || 2;
@@ -95,8 +96,18 @@ function analyzeBudget({
   const foodDailyPerPerson = 700;
   const foodTotal = foodDailyPerPerson * numTravelers * daysCount;
 
+  // Add an intercity fare only when the source shows an INR fare per traveler.
+  // We do not convert other currencies or assume whether a fare is per person.
+  const verifiedIntercityFares = (transportResearch?.options || []).filter(option =>
+    option.fareStatus === "verified" && option.currency === "INR" && option.fareBasis === "per traveler" && Number.isFinite(Number(option.fare))
+  );
+  const intercityFarePerTraveler = verifiedIntercityFares.length
+    ? Math.min(...verifiedIntercityFares.map(option => Number(option.fare)))
+    : null;
+  const intercityTransportTotal = intercityFarePerTraveler === null ? 0 : intercityFarePerTraveler * numTravelers;
+
   const estimatedTotal = Math.round(
-    confirmedAttractionCost + accommodationTotal + transportTotal + foodTotal
+    confirmedAttractionCost + accommodationTotal + transportTotal + foodTotal + intercityTransportTotal
   );
 
   const isOverBudget = estimatedTotal > budgetLimit;
@@ -126,6 +137,14 @@ function analyzeBudget({
         days: daysCount,
         estimatedTotalINR: transportTotal,
         note: `Estimated local transit / scooter rental for ${numTravelers} traveler(s)`
+      },
+      intercityTransport: {
+        confirmedFarePerTravelerINR: intercityFarePerTraveler,
+        travelers: numTravelers,
+        confirmedOutboundTotalINR: intercityTransportTotal,
+        note: intercityFarePerTraveler === null
+          ? "No source-verified INR fare explicitly stated per traveler; excluded from total."
+          : `Lowest sourced outbound fare of ₹${intercityFarePerTraveler} per traveler multiplied by ${numTravelers}; return fare is not included.`
       },
       foodBuffer: {
         estimatedDailyPerPersonINR: foodDailyPerPerson,
